@@ -197,3 +197,26 @@ process addTommo_AF {
     bcftools index --threads 2 -t ${chr}.tommo.vcf.gz
     """
 }
+
+process info_recalculate {
+    executor 'slurm'
+    queue 'gr10478b'
+    time '36h'
+    tag "${chr}"
+
+    publishDir "${params.outdir}/08.info_recalculate", mode: 'symlink'
+
+    input:
+    tuple val(chr), file(snp_vcf), file(snp_vcf_tbi) from vcf_vep_ch
+
+    output:
+    tuple val(chr), file(info_vcf), file(info_vcf_tbi) into bed_prepare_ch
+
+    script:
+    info_vcf = chr + '.tommo.snp.reinfo.vcf.gz'
+    info_vcf_tbi = chr + '.tommo.snp.reinfo.vcf.gz.tbi'
+    """
+    bcftools +fill-tags ${snp_vcf} -Oz -o ${info_vcf} --threads 2 -- -t 'AF,AC,AN,DP:1=int(sum(FORMAT/DP))'
+    bcftools index -t ${info_vcf} --threads 2
+    """
+}
