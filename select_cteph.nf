@@ -1,10 +1,6 @@
-params.filePath = '/LARGE1/gr10478/platform/JHRPv4/workspace/pipeline/output/VQSR.v4/'
+params.filePath = '/LARGE0/gr10478/b37974/Pulmonary_Hypertension/Genome/ALL/08.info_recalculate/'
 params.samplelist = '/LARGE0/gr10478/b37974/Pulmonary_Hypertension/cteph_project/sample_ls/CTEPH_lst'
 params.outdir = '/LARGE0/gr10478/b37974/Pulmonary_Hypertension/Genome/CTEPH'
-
-params.TommoFile = '/LARGE0/gr10478/b37974/Pulmonary_Hypertension/cteph_project/database/Tommo_hg38/tommo-54kjpn-20230626r3-GRCh38-af-autosome.vcf.gz'
-params.TommoFile_tbi = '/LARGE0/gr10478/b37974/Pulmonary_Hypertension/cteph_project/database/Tommo_hg38/tommo-54kjpn-20230626r3-GRCh38-af-autosome.vcf.gz.tbi'
-params.Tommohdr = '/LARGE0/gr10478/b37974/Pulmonary_Hypertension/cteph_project/database/Tommo_hg38/hdr.txt'
 
 Channel
     .of(1..22)
@@ -27,7 +23,7 @@ process selectPASS {
     tuple chr, file(pass_vcf), file(pass_vcf_tbi) into select_pass_ch
 
     script:
-    vcf = filePath + 'all.VQSR3.chr' + chr + '.vcf.gz'
+    vcf = filePath + chr + '.tommo.snp.reinfo.vcf.gz'
     pass_vcf = chr + '.pass.mac1.vcf.gz'
     pass_vcf_tbi = chr + '.pass.mac1.vcf.gz.tbi'
 
@@ -37,222 +33,25 @@ process selectPASS {
     """
 }
 
-process Variantfilter {
+process info_recalculate {
     executor 'slurm'
     queue 'gr10478b'
     time '36h'
     tag "${chr}"
 
-    publishDir "${params.outdir}/02.VTfilter", mode: 'symlink'
+    publishDir "${params.outdir}/02.info_recalculate", mode: 'symlink'
 
     input:
-    tuple chr, file(pass_vcf), file(pass_vcf_tbi) from select_pass_ch
+    tuple val(chr), file(snp_vcf), file(snp_vcf_tbi) from select_pass_ch
 
     output:
-    tuple chr, file(vcf), file(vcf_tbi) into GTfilter_ch
+    tuple val(chr), file(info_vcf), file(info_vcf_tbi) into bed_prepare_ch
 
     script:
-    vcf = chr + '.vft.vcf.gz'
-    vcf_tbi = chr + '.vft.vcf.gz.tbi'
-
+    info_vcf = chr + '.cteph.tommo.snp.reinfo.vcf.gz'
+    info_vcf_tbi = chr + '.cteph.tommo.snp.reinfo.vcf.gz.tbi'
     """
-    bcftools view --threads 2 -i 'VQSLOD > 10 & MQ > 58.75' -Oz -o $vcf $pass_vcf
-    bcftools index --threads 2 -t $vcf
-    """
-}
-
-process GTfilter {
-    executor 'slurm'
-    queue 'gr10478b'
-    time '36h'
-    tag "${chr}"
-
-    publishDir "${params.outdir}/03.GTfilter1", mode: 'symlink'
-
-    input:
-    tuple chr, file(pass_vcf), file(pass_vcf_tbi) from GTfilter_ch
-
-    output:
-    tuple chr, file(vcf), file(vcf_tbi) into GT_addAF_ch
-
-    script:
-    vcf = chr + '.vft.gft1.vcf.gz'
-    vcf_tbi = chr + '.vft.gft1.vcf.gz.tbi'
-
-    """
-    singularity exec -B /LARGE0/gr10478/b37974/Pulmonary_Hypertension/cteph_project:/LARGE0/gr10478/b37974/Pulmonary_Hypertension/cteph_project /LARGE0/gr10478/b37974/Pulmonary_Hypertension/cteph_project/gatk_4.1.3.0.sif gatk --java-options "-Xmx1G" VariantFiltration \
-    -R /LARGE0/gr10478/b37974/Pulmonary_Hypertension/cteph_project/database/refseq/hs38DH.fa \
-    -V $pass_vcf \
-    --genotype-filter-name "LowGQ" \
-    --genotype-filter-expression "GQ<20" \
-    --genotype-filter-name "LowDP" \
-    --genotype-filter-expression "DP<10" \
-    --set-filtered-genotype-to-no-call true \
-    --create-output-variant-index true \
-    -O $vcf
-
-    echo $vcf
-    """
-}
-
-// process GT_addAF {
-//     executor 'slurm'
-//     queue 'gr10478b'
-//     time '7d'
-//     tag "${chr}"
-
-//     publishDir "${params.outdir}/04.GT_addAF", mode: 'symlink'
-
-//     input:
-//     tuple chr, file(pass_vcf), file(pass_vcf_tbi) from GT_addAF_ch
-
-//     output:
-//     tuple chr, file(GT_ABB_vcf), file(GT_ABB_vcf_tbi) into normVCF_ch
-
-//     script:
-//     GT_ABB_vcf = chr + '.GT_addAF.vcf.gz'
-//     GT_ABB_vcf_tbi = chr + '.GT_addAF.vcf.gz.tbi'
-
-//     """
-//     singularity exec -B /LARGE0/gr10478/b37974/Pulmonary_Hypertension/cteph_project:/LARGE0/gr10478/b37974/Pulmonary_Hypertension/cteph_project /LARGE0/gr10478/b37974/Pulmonary_Hypertension/cteph_project/gatk_4.1.3.0.sif gatk --java-options "-Xmx1G" VariantAnnotator \
-//     -V $pass_vcf \
-//     -A AlleleFraction \
-//     --create-output-variant-index true \
-//     -O $GT_ABB_vcf
-//     """
-// }
-
-process normVCF {
-    executor 'slurm'
-    queue 'gr10478b'
-    time '7d'
-    tag "${chr}"
-
-    publishDir "${params.outdir}/05.normVCF_keepAD", mode: 'symlink'
-
-    input:
-    tuple chr, file(pass_vcf), file(pass_vcf_tbi) from GT_addAF_ch
-
-    output:
-    tuple chr, file(norm_fix_vcf), file(norm_fix_vcf_tbi) into GT2Nocall_ch
-
-    script:
-    norm_vcf = chr + '.norm.vcf.gz'
-    norm_fix_vcf = chr + '.norm_fix.vcf.gz'
-    norm_fix_vcf_tbi = chr + '.norm_fix.vcf.gz.tbi'
-    """
-    bcftools norm --threads 2 -m- -w 10000 --keep-sum AD -f /LARGE0/gr10478/b37974/Pulmonary_Hypertension/cteph_project/database/refseq/hs38DH.fa -Oz -o $norm_vcf $pass_vcf
-    bcftools view $norm_vcf | sed 's/nan/NaN/g' | bgzip > $norm_fix_vcf
-    bcftools index --threads 2 -t $norm_fix_vcf
-    rm $norm_vcf
-    """
-    //bcftools norm --threads 5 -m - -w 10000 -f ~/projects/database/refseq/hs38DH.fa -Oz -o $norm_vcf $pass_vcf
-}
-
-// process GT2Nocall {
-//     executor 'slurm'
-//     queue 'gr10478b'
-//     time '7d'
-//     tag "${chr}"
-
-//     publishDir "${params.outdir}/06.GT2NCall_PASS", mode: 'symlink'
-
-//     input:
-//     tuple chr, file(norm_fix_vcf), file(norm_fix_vcf_tbi) from GT2Nocall_ch
-
-//     output:
-//     tuple chr, file(GT2Nocall_vcf), file(GT2Nocall_vcf_tbi) into filterAC_ch
-//     script:
-//     GT2Nocall_vcf = chr + '.GT_ABB.vcf.gz'
-//     GT2Nocall_vcf_tbi = chr + '.GT_ABB.vcf.gz.tbi'
-
-//     """
-//     singularity exec -B /LARGE0/gr10478/b37974/Pulmonary_Hypertension/cteph_project:/LARGE0/gr10478/b37974/Pulmonary_Hypertension/cteph_project /LARGE0/gr10478/b37974/Pulmonary_Hypertension/cteph_project/gatk_4.1.3.0.sif gatk --java-options "-Xmx1G" VariantFiltration \
-//     -V $norm_fix_vcf \
-//     --genotype-filter-name "ABB01" \
-//     --genotype-filter-expression "isHet == 1 && AF < 0.1" \
-//     --genotype-filter-name "ABB09" \
-//     --genotype-filter-expression "isHet == 1 && AF > 0.9" \
-//     --genotype-filter-name "NAN" \
-//     --genotype-filter-expression "AF == 'NaN'" \
-//     --set-filtered-genotype-to-no-call true \
-//     --create-output-variant-index true \
-//     -O $GT2Nocall_vcf
-//     """
-// }
-
-process GT2Nocall_2 {
-    executor 'slurm'
-    queue 'gr10478b'
-    time '7d'
-    tag "${chr}"
-
-    publishDir "${params.outdir}/06.GT2NCall_PASS_noABB", mode: 'symlink'
-
-    input:
-    tuple chr, file(norm_fix_vcf), file(norm_fix_vcf_tbi) from GT2Nocall_ch
-
-    output:
-    tuple chr, file(GT2Nocall_vcf), file(GT2Nocall_vcf_tbi) into filterAC_ch
-    script:
-    GT2Nocall_vcf = chr + '.GT_ABB.vcf.gz'
-    GT2Nocall_vcf_tbi = chr + '.GT_ABB.vcf.gz.tbi'
-
-    """
-    singularity exec -B /LARGE0/gr10478/b37974/Pulmonary_Hypertension/cteph_project:/LARGE0/gr10478/b37974/Pulmonary_Hypertension/cteph_project /LARGE0/gr10478/b37974/Pulmonary_Hypertension/cteph_project/gatk_4.1.3.0.sif gatk --java-options "-Xmx1G" VariantFiltration \
-    -V $norm_fix_vcf \
-    --genotype-filter-name "NAN" \
-    --genotype-filter-expression "AF == 'NaN'" \
-    --set-filtered-genotype-to-no-call true \
-    --create-output-variant-index true \
-    -O $GT2Nocall_vcf
-    """
-}
-
-process filterAC {
-    executor 'slurm'
-    queue 'gr10478b'
-    time '7d'
-    tag "${chr}"
-
-    publishDir "${params.outdir}/07.filtAC1_vcf", mode: 'symlink'
-
-    input:
-    tuple chr, file(vcf), file(vcf_tbi) from filterAC_ch
-
-    output:
-    tuple chr, file(outvcf), file(outvcf_tbi) into addAF_ch
-
-    script:
-    outvcf = chr + '.vep.filtAC1.vcf.gz'
-    outvcf_tbi = chr + '.vep.filtAC1.vcf.gz.tbi'
-
-    """
-    bcftools view --threads 2 -Oz -o $outvcf -c 1 $vcf
-    bcftools index --threads 2 -t $outvcf
-    """
-}
-
-process addTommo_HGVD_AF {
-    executor 'slurm'
-    queue 'gr10478b'
-    time '7d'
-    tag "${chr}"
-
-    publishDir "${params.outdir}/08.addTommo_HGVD_AF_vcf", mode: 'symlink'
-    
-    input:
-    tuple chr, file(vcf), file(vcf_tbi) from addAF_ch
-    path Tommo from params.TommoFile
-    path Tommo_tbi from params.TommoFile_tbi
-    path header from params.Tommohdr
-
-    output:
-    tuple chr, file("${chr}.tommo.vcf.gz"), file("${chr}.tommo.vcf.gz.tbi") into vcf_vep_ch
-
-    script:
-    """
-    bcftools annotate --threads 2 -a $Tommo -c "TOMMO_AF:=AF" -h $header -Ou $vcf | bcftools annotate --threads 2 -I +'%CHROM:%POS:%REF:%FIRST_ALT' -Oz -o ${chr}.tommo.vcf.gz
-    bcftools index --threads 2 -t ${chr}.tommo.vcf.gz
+    bcftools +fill-tags ${snp_vcf} -Oz -o ${info_vcf} --threads 2 -- -t 'AF,AC,AN,DP:1=int(sum(FORMAT/DP))'
+    bcftools index -t ${info_vcf} --threads 2
     """
 }

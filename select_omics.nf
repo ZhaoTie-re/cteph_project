@@ -1,6 +1,6 @@
 params.filePath = '/LARGE0/gr10478/b37974/Pulmonary_Hypertension/Genome/ALL/08.info_recalculate/'
-params.samplelist = '/LARGE0/gr10478/b37974/Pulmonary_Hypertension/cteph_project/sample_ls/NAGA_lst'
-params.outdir = '/LARGE0/gr10478/b37974/Pulmonary_Hypertension/Genome/NAGAHAMA'
+params.samplelist = '/LARGE0/gr10478/b37974/Pulmonary_Hypertension/cteph_project/sample_ls/omics_lst'
+params.outdir = '/LARGE0/gr10478/b37974/Pulmonary_Hypertension/Genome/OMICS'
 
 Channel
     .of(1..22)
@@ -48,8 +48,8 @@ process info_recalculate {
     tuple val(chr), file(info_vcf), file(info_vcf_tbi) into bed_prepare_ch
 
     script:
-    info_vcf = chr + '.naga.tommo.snp.reinfo.vcf.gz'
-    info_vcf_tbi = chr + '.naga.tommo.snp.reinfo.vcf.gz.tbi'
+    info_vcf = chr + '.omics.tommo.reinfo.vcf.gz'
+    info_vcf_tbi = chr + '.omics.tommo.reinfo.vcf.gz.tbi'
     """
     bcftools +fill-tags ${snp_vcf} -Oz -o ${info_vcf} --threads 2 -- -t 'AF,AC,AN,DP:1=int(sum(FORMAT/DP))'
     bcftools index -t ${info_vcf} --threads 2
